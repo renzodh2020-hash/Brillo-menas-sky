@@ -6,7 +6,6 @@ import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
-import net.minecraft.text.Text;
 import org.lwjgl.glfw.GLFW;
 
 public class SimpleSellClient implements ClientModInitializer {
@@ -29,7 +28,6 @@ public class SimpleSellClient implements ClientModInitializer {
         ClientTickEvents.END_CLIENT_TICK.register(minecraftClient -> {
             while (toggleKey.wasPressed()) {
                 enabled = !enabled;
-                sendMessage(enabled ? "SimpleSell activado." : "SimpleSell pausado.");
             }
 
             tickSell();
@@ -50,19 +48,12 @@ public class SimpleSellClient implements ClientModInitializer {
         if (!alreadySold) {
             runCommand("sellall");
             alreadySold = true;
-            sendMessage("Comando /sellall ejecutado.");
         }
     }
 
     private static void runCommand(String command) {
         if (client.player != null && client.player.networkHandler != null) {
             client.player.networkHandler.sendChatCommand(command);
-        }
-    }
-
-    private static void sendMessage(String message) {
-        if (client.player != null) {
-            client.player.sendMessage(Text.literal("[SimpleSell] " + message), false);
         }
     }
 }
