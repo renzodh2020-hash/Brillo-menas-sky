@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "simple_sell",
+  "version": "1.0.0",
+  "name": "Simple Sell",
+  "description": "Ejecuta /sellall cuando la segunda mano tiene un item.",
+  "authors": [
+    "Paolo"
+  ],
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "com.paolo.simplesell.SimpleSellClient"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.15.0",
+    "minecraft": "1.20.4",
+    "fabric-api": "*"
+  }
+}
