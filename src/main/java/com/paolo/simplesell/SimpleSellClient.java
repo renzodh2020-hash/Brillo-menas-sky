@@ -8,13 +8,25 @@ import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
 import org.lwjgl.glfw.GLFW;
 
+import java.util.Random;
+
 public class SimpleSellClient implements ClientModInitializer {
     private static final MinecraftClient client = MinecraftClient.getInstance();
+    private static final Random random = new Random();
 
     private static KeyBinding toggleKey;
 
     private static boolean enabled = false;
+
+    // Evita repetir /sellall mientras el mismo item sigue en la segunda mano
     private static boolean alreadySold = false;
+
+    // Controla si ya se programo un /sellall pendiente
+    private static boolean sellScheduled = false;
+    private static int sellDelayTicks = 0;
+
+    // Cuenta cuantas veces se ejecuto /sellall
+    private static int sellCount = 0;
 
     @Override
     public void onInitializeClient() {
@@ -28,6 +40,11 @@ public class SimpleSellClient implements ClientModInitializer {
         ClientTickEvents.END_CLIENT_TICK.register(minecraftClient -> {
             while (toggleKey.wasPressed()) {
                 enabled = !enabled;
+
+                if (!enabled) {
+                    sellScheduled = false;
+                    sellDelayTicks = 0;
+                }
             }
 
             tickSell();
@@ -40,15 +57,54 @@ public class SimpleSellClient implements ClientModInitializer {
 
         boolean offhandHasItem = !client.player.getOffHandStack().isEmpty();
 
+        // Si la segunda mano esta vacia, se reinicia el detector
         if (!offhandHasItem) {
             alreadySold = false;
+            sellScheduled = false;
+            sellDelayTicks = 0;
             return;
         }
 
-        if (!alreadySold) {
-            runCommand("sellall");
-            alreadySold = true;
+        // Si ya se vendio por este item, no repetir
+        if (alreadySold) {
+            return;
         }
+
+        // Si hay item y aun no hay venta programada, programa el tiempo aleatorio
+        if (!sellScheduled) {
+            scheduleRandomSellDelay();
+            sellScheduled = true;
+            return;
+        }
+
+        // Cuenta regresiva para ejecutar /sellall
+        if (sellDelayTicks > 0) {
+            sellDelayTicks--;
+            return;
+        }
+
+        // Antes de ejecutar, verifica otra vez que aun haya item en la segunda mano
+        if (!client.player.getOffHandStack().isEmpty()) {
+            runCommand("sellall");
+
+            sellCount++;
+
+            if (sellCount >= 10) {
+                sellCount = 0;
+                runCommand("home up");
+            }
+
+            alreadySold = true;
+            sellScheduled = false;
+        }
+    }
+
+    private static void scheduleRandomSellDelay() {
+        // Tiempo aleatorio entre 0.500 y 1.500 segundos, con 3 decimales
+        int milliseconds = 500 + random.nextInt(1001);
+
+        // Minecraft corre a 20 ticks por segundo: 1 tick = 50 ms
+        sellDelayTicks = Math.max(1, milliseconds / 50);
     }
 
     private static void runCommand(String command) {
