@@ -25,8 +25,11 @@ public class SimpleSellClient implements ClientModInitializer {
     private static boolean sellScheduled = false;
     private static int sellDelayTicks = 0;
 
-    // Cuenta cuantas veces se ejecuto /sellall
+    // Contador de /sellall
     private static int sellCount = 0;
+
+    // Meta aleatoria para ejecutar /home up entre 9 y 14 sellall
+    private static int nextHomeTarget = randomHomeTarget();
 
     @Override
     public void onInitializeClient() {
@@ -89,9 +92,12 @@ public class SimpleSellClient implements ClientModInitializer {
 
             sellCount++;
 
-            if (sellCount >= 10) {
+            if (sellCount >= nextHomeTarget) {
                 sellCount = 0;
                 runCommand("home up");
+
+                // Despues de ejecutar /home up, elige una nueva meta aleatoria
+                nextHomeTarget = randomHomeTarget();
             }
 
             alreadySold = true;
@@ -105,6 +111,11 @@ public class SimpleSellClient implements ClientModInitializer {
 
         // Minecraft corre a 20 ticks por segundo: 1 tick = 50 ms
         sellDelayTicks = Math.max(1, milliseconds / 50);
+    }
+
+    private static int randomHomeTarget() {
+        // Numero aleatorio entre 9 y 14
+        return 9 + random.nextInt(6);
     }
 
     private static void runCommand(String command) {
