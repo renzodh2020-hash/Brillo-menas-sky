@@ -11,56 +11,82 @@ import org.lwjgl.glfw.GLFW;
 import java.util.Random;
 
 public class SimpleSellClient implements ClientModInitializer {
-    private static final MinecraftClient client = MinecraftClient.getInstance();
-    private static final Random random = new Random();
+    private static final MinecraftClient CLIENT = MinecraftClient.getInstance();
+    private static final Random RANDOM = new Random();
 
-    private static KeyBinding toggleKey;
+    private static KeyBinding toggleSellKey;
+    private static KeyBinding toggleAutoMineKey;
 
-    private static boolean enabled = false;
+    private static boolean sellEnabled = false;
+    private static boolean autoMineEnabled = false;
 
-    // Evita repetir /sellall mientras el mismo item sigue en la segunda mano
     private static boolean alreadySold = false;
-
-    // Controla si ya se programo un /sellall pendiente
     private static boolean sellScheduled = false;
-    private static int sellDelayTicks = 0;
 
-    // Contador de /sellall
+    private static int sellDelayTicks = 0;
     private static int sellCount = 0;
 
-    // Meta aleatoria para ejecutar /home up entre 9 y 14 sellall
+    /*
+     * Después de esta cantidad aleatoria de /sellall,
+     * se ejecuta /home up.
+     */
     private static int nextHomeTarget = randomHomeTarget();
 
     @Override
     public void onInitializeClient() {
-        toggleKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+        toggleSellKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.simple_sell.toggle",
                 InputUtil.Type.KEYSYM,
                 GLFW.GLFW_KEY_O,
                 "category.simple_sell"
         ));
 
-        ClientTickEvents.END_CLIENT_TICK.register(minecraftClient -> {
-            while (toggleKey.wasPressed()) {
-                enabled = !enabled;
+        toggleAutoMineKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                "key.simple_sell.automine",
+                InputUtil.Type.KEYSYM,
+                GLFW.GLFW_KEY_P,
+                "category.simple_sell"
+        ));
 
-                if (!enabled) {
+        ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            while (toggleSellKey.wasPressed()) {
+                sellEnabled = !sellEnabled;
+
+                if (!sellEnabled) {
                     sellScheduled = false;
                     sellDelayTicks = 0;
                 }
             }
 
+            while (toggleAutoMineKey.wasPressed()) {
+                autoMineEnabled = !autoMineEnabled;
+
+                if (!autoMineEnabled) {
+                    releaseAutoMineKeys();
+                }
+            }
+
             tickSell();
+            tickAutoMine();
         });
     }
 
     private static void tickSell() {
-        if (!enabled) return;
-        if (client.player == null || client.world == null) return;
+        if (!sellEnabled) {
+            return;
+        }
 
-        boolean offhandHasItem = !client.player.getOffHandStack().isEmpty();
+        if (CLIENT.player == null || CLIENT.world == null) {
+            return;
+        }
 
-        // Si la segunda mano esta vacia, se reinicia el detector
+        boolean offhandHasItem =
+                !CLIENT.player.getOffHandStack().isEmpty();
+
+        /*
+         * Si la segunda mano queda vacía,
+         * se reinicia el detector.
+         */
         if (!offhandHasItem) {
             alreadySold = false;
             sellScheduled = false;
@@ -68,35 +94,45 @@ public class SimpleSellClient implements ClientModInitializer {
             return;
         }
 
-        // Si ya se vendio por este item, no repetir
+        /*
+         * Si ya se ejecutó /sellall por este ítem,
+         * no vuelve a repetirlo hasta que la mano se vacíe.
+         */
         if (alreadySold) {
             return;
         }
 
-        // Si hay item y aun no hay venta programada, programa el tiempo aleatorio
+        /*
+         * Cuando aparece un ítem, programa una espera
+         * aleatoria entre 0.500 y 1.500 segundos.
+         */
         if (!sellScheduled) {
             scheduleRandomSellDelay();
             sellScheduled = true;
             return;
         }
 
-        // Cuenta regresiva para ejecutar /sellall
         if (sellDelayTicks > 0) {
             sellDelayTicks--;
             return;
         }
 
-        // Antes de ejecutar, verifica otra vez que aun haya item en la segunda mano
-        if (!client.player.getOffHandStack().isEmpty()) {
+        /*
+         * Comprueba otra vez que el ítem siga en la segunda mano.
+         */
+        if (!CLIENT.player.getOffHandStack().isEmpty()) {
             runCommand("sellall");
 
             sellCount++;
 
+            /*
+             * Cada 9 a 14 ejecuciones aleatorias,
+             * manda /home up.
+             */
             if (sellCount >= nextHomeTarget) {
-                sellCount = 0;
                 runCommand("home up");
 
-                // Despues de ejecutar /home up, elige una nueva meta aleatoria
+                sellCount = 0;
                 nextHomeTarget = randomHomeTarget();
             }
 
@@ -105,22 +141,46 @@ public class SimpleSellClient implements ClientModInitializer {
         }
     }
 
-    private static void scheduleRandomSellDelay() {
-        // Tiempo aleatorio entre 0.500 y 1.500 segundos, con 3 decimales
-        int milliseconds = 500 + random.nextInt(1001);
+    private static void tickAutoMine() {
+        if (!autoMineEnabled) {
+            return;
+        }
 
-        // Minecraft corre a 20 ticks por segundo: 1 tick = 50 ms
-        sellDelayTicks = Math.max(1, milliseconds / 50);
+        if (CLIENT.player == null || CLIENT.world == null) {
+            releaseAutoMineKeys();
+            return;
+        }
+
+        /*
+         * Mantiene presionados:
+         * - clic izquierdo para picar
+         * - Shift para agacharse
+         */
+        CLIENT.options.attackKey.setPressed(true);
+        CLIENT.options.sneakKey.setPressed(true);
+    }
+
+    private static void releaseAutoMineKeys() {
+        CLIENT.options.attackKey.setPressed(false);
+        CLIENT.options.sneakKey.setPressed(false);
+    }
+
+    private static void scheduleRandomSellDelay() {
+        int milliseconds =
+                500 + RANDOM.nextInt(1001);
+
+        sellDelayTicks =
+                Math.max(1, milliseconds / 50);
     }
 
     private static int randomHomeTarget() {
-        // Numero aleatorio entre 9 y 14
-        return 9 + random.nextInt(6);
+        return 9 + RANDOM.nextInt(6);
     }
 
     private static void runCommand(String command) {
-        if (client.player != null && client.player.networkHandler != null) {
-            client.player.networkHandler.sendChatCommand(command);
+        if (CLIENT.player != null
+                && CLIENT.player.networkHandler != null) {
+            CLIENT.player.networkHandler.sendChatCommand(command);
         }
     }
 }
